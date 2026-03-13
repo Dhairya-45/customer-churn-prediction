@@ -1,4 +1,5 @@
 import pickle
+import os
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -8,16 +9,19 @@ st.title("Customer Churn Prediction")
 # Load model and scaler
 @st.cache_resource
 def load_artifacts():
-    with open("pkl/churn_model.pkl", "rb") as f:
+    base        = os.path.dirname(os.path.abspath(__file__))
+    model_path  = os.path.join(base, "pkl", "churn_model.pkl")
+    scaler_path = os.path.join(base, "pkl", "churn_scaler.pkl")
+    with open(model_path, "rb") as f:
         model = pickle.load(f)
-    with open("pkl/churn_scaler.pkl", "rb") as f:
+    with open(scaler_path, "rb") as f:
         scaler = pickle.load(f)
     return model, scaler
 
 try:
     model, scaler = load_artifacts()
 except FileNotFoundError as e:
-    st.error(f"Model file not found: {e}. Run notebook cells 39-40 first.")
+    st.error(f"Model file not found: {e}")
     st.stop()
 
 st.header("Single Customer Prediction")
@@ -28,7 +32,7 @@ price    = st.number_input("Price (Total Spend £)", min_value=0.01, value=200.0
 
 if st.button("Predict"):
     input_df = pd.DataFrame([[invoice, quantity, price]], columns=["Invoice", "Quantity", "Price"])
-    X = scaler.transform(input_df)
+    X     = scaler.transform(input_df)
     pred  = model.predict(X)[0]
     proba = model.predict_proba(X)[0][1]
 
@@ -45,7 +49,7 @@ st.write("Upload a CSV with columns: Invoice, Quantity, Price")
 uploaded = st.file_uploader("Upload CSV", type=["csv"])
 
 if uploaded:
-    batch = pd.read_csv(uploaded)
+    batch   = pd.read_csv(uploaded)
     X_batch = scaler.transform(batch[["Invoice", "Quantity", "Price"]])
     batch["ChurnProbability"] = np.round(model.predict_proba(X_batch)[:, 1], 4)
     batch["Prediction"]       = model.predict(X_batch)
@@ -53,5 +57,4 @@ if uploaded:
 
     st.write(f"Total: {len(batch)} | Churners: {batch['Prediction'].sum()} | Rate: {batch['Prediction'].mean():.1%}")
     st.dataframe(batch.sort_values("ChurnProbability", ascending=False))
-
     st.download_button("Download Results", batch.to_csv(index=False), "churn_results.csv", "text/csv")
